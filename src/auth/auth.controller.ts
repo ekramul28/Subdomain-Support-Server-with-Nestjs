@@ -1,22 +1,10 @@
-import {
-  Controller,
-  Post,
-  Req,
-  Res,
-  Next,
-  HttpStatus,
-  UseGuards,
-  UsePipes,
-  Body,
-} from '@nestjs/common';
+import { Controller, Post, Req, Res, HttpStatus, UseGuards, UsePipes, Body } from '@nestjs/common';
 import { AuthService } from './auth.service';
-
-import type { NextFunction, Request, Response } from 'express';
+import type { Request, Response } from 'express';
 import { successResponse } from 'src/Common/Re-useable/successResponse';
 import { ConfigService } from '@nestjs/config';
 import { AuthGuard } from 'src/Common/guard/auth.guard';
 import { Roles } from 'src/Common/decorators/role.decorator';
-// import { UserRole } from '@prisma/client';
 import { ZodValidationPipe } from 'src/Common/pipes/zodValidatiionPipe';
 import { authSchemas } from './auth.zodSchema';
 import { UserRole } from 'generated/prisma';
@@ -29,85 +17,55 @@ export class AuthController {
   ) {}
 
   @Post('signup')
-  @UsePipes(new ZodValidationPipe(authSchemas.signupSchema))
-  async signup(@Res() res: Response, @Next() next: NextFunction, @Body() body: any) {
-    try {
-      const result = await this.authService.signupDB(body);
-      return res.send(successResponse(result, HttpStatus.OK, 'Signup done'));
-    } catch (error) {
-      next(error);
-    }
+  @UsePipes(new ZodValidationPipe(authSchemas.signupSchema as any))
+  async signup(@Body() body: any) {
+    const result = await this.authService.signupDB(body);
+    return successResponse(result, HttpStatus.OK, 'Signup done');
   }
+
   @Post('login')
-  @UsePipes(new ZodValidationPipe(authSchemas.loginSchema))
-  async loginUser(@Res() res: Response, @Next() next: NextFunction, @Body() body: any) {
-    try {
-      const result = await this.authService.loginUserDB(body);
+  @UsePipes(new ZodValidationPipe(authSchemas.loginSchema as any))
+  async loginUser(@Body() body: any, @Res({ passthrough: true }) res: Response) {
+    const result = await this.authService.loginUserDB(body);
 
-      const { refreshToken } = result;
+    const { refreshToken } = result;
 
-      res.cookie('refreshToken', refreshToken, {
-        secure: this.configService.get('env') === 'production',
-        httpOnly: true,
-      });
-      res.send(
-        successResponse(
-          {
-            accessToken: result.accessToken,
-            refreshToken,
-          },
-          HttpStatus.OK,
-          'Signup successfully!',
-        ),
-      );
-    } catch (error) {
-      next(error);
-    }
+    // Send refreshToken in HTTP-only cookie
+    res.cookie('refreshToken', refreshToken, {
+      secure: this.configService.get('env') === 'production',
+      httpOnly: true,
+      sameSite: 'lax', // optional, good for subdomain auth
+      domain: '.yourdomain.com', // note the leading dot
+    });
+
+    return successResponse({ accessToken: result.accessToken }, HttpStatus.OK, 'Login successful');
   }
 
   @Post('refresh-token')
-  async refreshToken(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
-    try {
-      const { refreshToken } = req.cookies;
-      const result = await this.authService.refreshTokenDB(refreshToken);
-      return res.send(successResponse(result, HttpStatus.OK, 'refresh token send'));
-    } catch (error) {
-      next(error);
-    }
+  async refreshToken(@Req() req: Request) {
+    const { refreshToken } = req.cookies;
+    const result = await this.authService.refreshTokenDB(refreshToken);
+    return successResponse(result, HttpStatus.OK, 'Refresh token sent');
   }
 
   @Post('change-password')
   @UseGuards(AuthGuard)
   @Roles(UserRole.user, UserRole.admin, UserRole.superAdmin)
-  async changePassword(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
-    try {
-      const result = await this.authService.changePasswordDB(req?.user, req?.body);
-      return res.send(successResponse(result, HttpStatus.OK, 'Password change'));
-    } catch (error) {
-      next(error);
-    }
+  async changePassword(@Req() req: Request, @Body() body: any) {
+    const result = await this.authService.changePasswordDB(req.user, body);
+    return successResponse(result, HttpStatus.OK, 'Password changed');
   }
 
-  @Post('forget-password')
-  @UseGuards(AuthGuard)
-  @Roles(UserRole.user, UserRole.admin, UserRole.superAdmin)
-  async forgotPassword(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
-    try {
-      const result = await this.authService.forgotPasswordDB(req?.body);
-      return res.send(successResponse(result, HttpStatus.OK, 'email send message'));
-    } catch (error) {
-      next(error);
-    }
+  @Post('forgot-password')
+  async forgotPassword(@Body() body: { email: string }) {
+    const result = await this.authService.forgotPasswordDB(body);
+    return successResponse(result, HttpStatus.OK, 'Email sent with reset link');
   }
 
   @Post('reset-password')
-  async resetPassword(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
-    try {
-      const token = req.headers.authorization || '';
-      const result = await this.authService.resetPasswordDB(token, req?.body);
-      return res.send(successResponse(result, HttpStatus.OK, 'Password change done'));
-    } catch (error) {
-      next(error);
-    }
+  async resetPassword(@Body() body: { id: string; password: string; token: string }) {
+    const { token, ...payload } = body;
+    const result = await this.authService.resetPasswordDB(token, payload);
+    return successResponse(result, HttpStatus.OK, 'Password reset successfully');
   }
 }
