@@ -2,31 +2,18 @@ import { z } from 'zod';
 
 const signupSchema = z.object({
   body: z.object({
-    name: z.string({
-      required_error: 'Name is required!',
-    }),
-    email: z.string({
-      required_error: 'Email is required!',
-    }),
+    name: z.string().nonempty({ message: 'Name is required!' }),
+    email: z.string().nonempty({ message: 'Email is required!' }),
     password: z
-      .string({
-        required_error: 'Password is required!',
-      })
-      .min(6)
-      .max(15),
+      .string()
+      .min(6, { message: 'Password must be at least 6 characters!' })
+      .max(15, { message: 'Password must be at most 15 characters!' }),
   }),
 });
 const loginSchema = z.object({
   body: z.object({
-    email: z.string({
-      required_error: 'Email is required!',
-    }),
-    password: z
-      .string({
-        required_error: 'Password is required!',
-      })
-      .min(6)
-      .max(15),
+    email: z.string().nonempty({ message: 'Email is required!' }),
+    password: z.string().nonempty({ message: 'Password is required!' }).min(6).max(15),
   }),
 });
 

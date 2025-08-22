@@ -38,3 +38,14 @@ model Session {
   expiresAt DateTime
   createdAt DateTime @default(now())
 }
+
+enum UserRole {
+  user
+  admin
+  superAdmin
+}
+
+enum UserStatus {
+  active
+  blocked
+}

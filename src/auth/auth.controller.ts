@@ -16,9 +16,10 @@ import { successResponse } from 'src/Common/Re-useable/successResponse';
 import { ConfigService } from '@nestjs/config';
 import { AuthGuard } from 'src/Common/guard/auth.guard';
 import { Roles } from 'src/Common/decorators/role.decorator';
-import { UserRole } from '@prisma/client';
+// import { UserRole } from '@prisma/client';
 import { ZodValidationPipe } from 'src/Common/pipes/zodValidatiionPipe';
 import { authSchemas } from './auth.zodSchema';
+import { UserRole } from 'generated/prisma';
 
 @Controller('api/auth')
 export class AuthController {
@@ -77,7 +78,7 @@ export class AuthController {
 
   @Post('change-password')
   @UseGuards(AuthGuard)
-  @Roles(UserRole.user, UserRole.admin, UserRole.vendor)
+  @Roles(UserRole.user, UserRole.admin, UserRole.superAdmin)
   async changePassword(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
     try {
       const result = await this.authService.changePasswordDB(req?.user, req?.body);
@@ -89,7 +90,7 @@ export class AuthController {
 
   @Post('forget-password')
   @UseGuards(AuthGuard)
-  @Roles(UserRole.user, UserRole.admin, UserRole.vendor)
+  @Roles(UserRole.user, UserRole.admin, UserRole.superAdmin)
   async forgotPassword(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
     try {
       const result = await this.authService.forgotPasswordDB(req?.body);

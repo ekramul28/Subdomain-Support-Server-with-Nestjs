@@ -3,249 +3,258 @@ import {
   HttpException,
   HttpStatus,
   Injectable,
+  UnauthorizedException,
+  NotFoundException,
+  ConflictException,
+  BadRequestException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { PrismaService } from 'src/prisma.service';
 import * as bcrypt from 'bcrypt';
+import { Prisma } from '@prisma/client'; // <-- use @prisma/client, not 'generated/prisma'
+
+enum UserStatus {
+  active = 'active',
+  inactive = 'inactive',
+  // Add other statuses as needed
+}
 import { JwtHelperService } from 'src/Common/helper/jwtHelpers';
-import { UserStatus } from '@prisma/client';
 import { EmailUtils } from 'src/Common/utils/emil.utils';
+import { PrismaService } from 'src/prisma/prisma.service';
+
+type SignupDto = { name: string; email: string; password: string };
+type LoginDto = { email: string; password: string };
+type ChangePasswordDto = { oldPassword: string; newPassword: string };
+type ResetPasswordDto = { id: string; password: string };
+
+const SALT_ROUNDS = 12;
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly emailUtils: EmailUtils,
-    private configService: ConfigService,
-    private prisma: PrismaService,
-    private jwtHelperService: JwtHelperService,
+    private readonly config: ConfigService,
+    private readonly prisma: PrismaService,
+    private readonly jwt: JwtHelperService,
   ) {}
-  async signupDB(body: any) {
-    const hashPass = await bcrypt.hash(body?.password, 12);
-    const userData = {
-      name: body?.name,
-      email: body?.email,
-      password: hashPass,
-    };
 
-    const result = await this.prisma.$transaction(async (tnx) => {
-      const userInfo = await tnx.user.create({
-        data: userData,
-      });
+  // ---------------------------
+  // SIGNUP
+  // ---------------------------
+  async signupDB(body: SignupDto) {
+    const { name, email, password } = body;
 
-      await tnx.userProfile.create({
-        data: {
-          email: userInfo.email,
-          userId: userInfo.id,
-        },
-      });
-
-      if (!userInfo) {
-        throw new HttpException(
-          'Something went wrong !',
-          HttpStatus.BAD_REQUEST,
-        );
-      }
-
-      const accessToken = this.jwtHelperService.generateToken(
-        {
-          id: userInfo.id,
-          email: userInfo?.email,
-          role: userInfo?.role,
-        },
-        this.configService.get('jwt.jwt_secret'),
-        this.configService.get('jwt.expires_in'),
-      );
-
-      const refreshToken = this.jwtHelperService.generateToken(
-        { id: userInfo.id, email: userInfo?.email, role: userInfo?.role },
-        this.configService.get('jwt.refresh_token_secret'),
-        this.configService.get('jwt.refresh_token_expires_in'),
-      );
-      return {
-        accessToken,
-        refreshToken,
-      };
-    });
-
-    return result;
-  }
-
-  async loginUserDB(payload: any) {
-    const userData = await this.prisma.user.findUniqueOrThrow({
-      where: {
-        email: payload.email,
-        status: UserStatus.active,
-      },
-    });
-
-    const isCorrectPassword: boolean = await bcrypt.compare(
-      payload.password,
-      userData.password,
-    );
-
-    if (!isCorrectPassword) {
-      throw new HttpException('Password incorrect!', HttpStatus.NOT_ACCEPTABLE);
+    // Optional: enforce password policy here too
+    if (!password || password.length < 8) {
+      throw new BadRequestException('Password must be at least 8 characters.');
     }
-    const accessToken = this.jwtHelperService.generateToken(
-      {
-        id: userData.id,
-        email: userData?.email,
-        role: userData?.role,
-      },
-      this.configService.get('jwt.jwt_secret'),
-      this.configService.get('jwt.expires_in'),
-    );
 
-    const refreshToken = this.jwtHelperService.generateToken(
-      { id: userData.id, email: userData?.email, role: userData?.role },
-      this.configService.get('jwt.refresh_token_secret'),
-      this.configService.get('jwt.refresh_token_expires_in'),
-    );
-    return {
-      accessToken,
-      refreshToken,
-    };
-  }
+    const hashPass = await bcrypt.hash(password, SALT_ROUNDS);
 
-  async refreshTokenDB(token: any) {
-    // console.log(token);
-
-    let decodedData;
     try {
-      decodedData = this.jwtHelperService.verifyToken(
-        token,
-        this.configService.get('jwt.refresh_token_secret'),
-      );
+      const result = await this.prisma.$transaction(async (tnx) => {
+        const userInfo = await tnx.user.create({
+          data: {
+            name,
+            email,
+            password: hashPass,
+            status: UserStatus.active,
+          },
+        });
+
+        await tnx.userProfile.create({
+          data: {
+            email: userInfo.email,
+            userId: userInfo.id,
+          },
+        });
+
+        const accessToken = this.jwt.generateToken(
+          { id: userInfo.id, email: userInfo.email, role: userInfo.role },
+          this.config.getOrThrow<string>('jwt.jwt_secret'),
+          this.config.getOrThrow<string>('jwt.expires_in'),
+        );
+
+        const refreshToken = this.jwt.generateToken(
+          { id: userInfo.id, email: userInfo.email, role: userInfo.role },
+          this.config.getOrThrow<string>('jwt.refresh_token_secret'),
+          this.config.getOrThrow<string>('jwt.refresh_token_expires_in'),
+        );
+
+        return { accessToken, refreshToken };
+      });
+
+      return result;
     } catch (err) {
-      throw new HttpException(
-        err?.message || 'You are not authorized!',
-        HttpStatus.UNAUTHORIZED,
-      );
+      // Unique constraint on email
+      if (err && err.code === 'P2002') {
+        throw new ConflictException('Email already exists.');
+      }
+      throw new HttpException('Signup failed.', HttpStatus.BAD_REQUEST);
     }
-
-    const userData = await this.prisma.user.findUniqueOrThrow({
-      where: {
-        email: decodedData.email,
-        status: UserStatus.active,
-      },
-    });
-
-    const accessToken = this.jwtHelperService.generateToken(
-      {
-        id: userData.id,
-        email: userData.email,
-        role: userData.role,
-      },
-      this.configService.get('jwt.jwt_secret'),
-      this.configService.get('jwt.expires_in'),
-    );
-
-    return {
-      accessToken,
-    };
   }
 
-  async changePasswordDB(user: any, payload: any) {
-    const userData = await this.prisma.user.findUniqueOrThrow({
-      where: {
-        email: user.email,
-        status: UserStatus.active,
-      },
+  // ---------------------------
+  // LOGIN
+  // ---------------------------
+  async loginUserDB(payload: LoginDto) {
+    const { email, password } = payload;
+
+    // Use findFirstOrThrow for compound filter (email + status)
+    const userData = await this.prisma.user.findFirst({
+      where: { email, status: UserStatus.active },
     });
 
-    const isCorrectPassword: boolean = await bcrypt.compare(
-      payload.oldPassword,
-      userData.password,
-    );
-
-    if (!isCorrectPassword) {
-      throw new Error('Password incorrect!');
+    if (!userData) {
+      throw new NotFoundException('User not found or inactive.');
     }
 
-    const hashedPassword: string = await bcrypt.hash(payload.newPassword, 12);
+    const isCorrectPassword = await bcrypt.compare(password, userData.password);
+    if (!isCorrectPassword) {
+      throw new HttpException('Incorrect password', HttpStatus.NOT_ACCEPTABLE);
+    }
+
+    const accessToken = this.jwt.generateToken(
+      { id: userData.id, email: userData.email, role: userData.role },
+      this.config.getOrThrow<string>('jwt.jwt_secret'),
+      this.config.getOrThrow<string>('jwt.expires_in'),
+    );
+
+    const refreshToken = this.jwt.generateToken(
+      { id: userData.id, email: userData.email, role: userData.role },
+      this.config.getOrThrow<string>('jwt.refresh_token_secret'),
+      this.config.getOrThrow<string>('jwt.refresh_token_expires_in'),
+    );
+
+    return { accessToken, refreshToken };
+  }
+
+  // ---------------------------
+  // REFRESH TOKEN
+  // ---------------------------
+  async refreshTokenDB(token: string) {
+    let decoded: { id: string; email: string; role: string };
+
+    try {
+      decoded = this.jwt.verifyToken(
+        token,
+        this.config.getOrThrow<string>('jwt.refresh_token_secret'),
+      );
+    } catch (err: any) {
+      throw new UnauthorizedException(err?.message || 'Invalid refresh token');
+    }
+
+    const userData = await this.prisma.user.findFirst({
+      where: { email: decoded.email, status: UserStatus.active },
+    });
+
+    if (!userData) throw new UnauthorizedException('User not found or inactive.');
+
+    const accessToken = this.jwt.generateToken(
+      { id: userData.id, email: userData.email, role: userData.role },
+      this.config.getOrThrow<string>('jwt.jwt_secret'),
+      this.config.getOrThrow<string>('jwt.expires_in'),
+    );
+
+    return { accessToken };
+  }
+
+  // ---------------------------
+  // CHANGE PASSWORD
+  // ---------------------------
+  async changePasswordDB(user: { email: string }, payload: ChangePasswordDto) {
+    const userData = await this.prisma.user.findFirst({
+      where: { email: user.email, status: UserStatus.active },
+    });
+    if (!userData) throw new NotFoundException('User not found or inactive.');
+
+    const isCorrectPassword = await bcrypt.compare(payload.oldPassword, userData.password);
+    if (!isCorrectPassword) {
+      throw new HttpException('Incorrect password', HttpStatus.NOT_ACCEPTABLE);
+    }
+
+    const hashedPassword = await bcrypt.hash(payload.newPassword, SALT_ROUNDS);
 
     await this.prisma.user.update({
-      where: {
-        email: userData.email,
-      },
+      where: { id: userData.id },
       data: {
         password: hashedPassword,
         lastPasswordChange: new Date(),
       },
     });
 
-    return {
-      message: 'Password changed successfully!',
-    };
+    return { message: 'Password changed successfully!' };
   }
 
-  //todo nodemaler problem here
+  // ---------------------------
+  // FORGOT PASSWORD
+  // ---------------------------
   async forgotPasswordDB(payload: { email: string }) {
-    const userData = await this.prisma.user.findUniqueOrThrow({
-      where: {
-        email: payload.email,
-        status: UserStatus.active,
-      },
+    const userData = await this.prisma.user.findFirst({
+      where: { email: payload.email, status: UserStatus.active },
     });
 
-    const resetPassToken = this.jwtHelperService.generateToken(
-      { id: userData.id, email: userData.email, role: userData.role },
-      this.configService.get('jwt.reset_pass_secret'),
-      this.configService.get('jwt.reset_pass_token_expires_in'),
-    );
-    //console.log(resetPassToken)
+    // Optional security: always return success to avoid email enumeration
+    if (!userData) {
+      // return { message: 'If the email exists, a reset link has been sent.' };
+      throw new NotFoundException('User not found or inactive.');
+    }
 
-    const resetPassLink =
-      this.configService.get('reset_pass_link') +
-      `?userId=${userData.id}&token=${resetPassToken}`;
-    // `${process.env.FRONTEND_URL}/forget-password?id=${user.id}&token=${resetToken} `
+    const resetPassToken = this.jwt.generateToken(
+      { id: userData.id, email: userData.email, role: userData.role },
+      this.config.getOrThrow<string>('jwt.reset_pass_secret'),
+      this.config.getOrThrow<string>('jwt.reset_pass_token_expires_in'),
+    );
+
+    const baseResetLink = this.config.getOrThrow<string>('RESET_PASS_LINK'); // e.g. http://localhost:3000/reset-password
+    const resetPassLink = `${baseResetLink}?userId=${userData.id}&token=${resetPassToken}`;
 
     await this.emailUtils.sendEmail(
       userData.email,
-      'E-Commerce password reset 5min !',
+      'Password reset (valid for a short time)',
       `
         <div>
-          <p>Dear User,</p>
-          <p>Your password reset link is below:</p>
-          <a href="${resetPassLink}">
-            <button>Reset Password</button>
-          </a>
+          <p>Dear ${userData.name || 'User'},</p>
+          <p>Click the button below to reset your password:</p>
+          <p><a href="${resetPassLink}"><button>Reset Password</button></a></p>
+          <p>If you did not request this, you can safely ignore this email.</p>
         </div>
       `,
     );
+
+    return { message: 'Reset link sent to your email.' };
   }
 
-  async resetPasswordDB(
-    token: string,
-    payload: { id: string; password: string },
-  ) {
-    await this.prisma.user.findUniqueOrThrow({
-      where: {
-        id: payload.id,
-        status: UserStatus.active,
-      },
+  // ---------------------------
+  // RESET PASSWORD
+  // ---------------------------
+  async resetPasswordDB(token: string, payload: ResetPasswordDto) {
+    const user = await this.prisma.user.findFirst({
+      where: { id: payload.id, status: UserStatus.active },
     });
+    if (!user) throw new NotFoundException('User not found or inactive.');
 
-    const isValidToken = this.jwtHelperService.verifyToken(
-      token,
-      this.configService.get('jwt.reset_pass_secret'),
-    );
-
-    if (!isValidToken) {
-      throw new ForbiddenException('Forbidden!');
+    let decoded: { id: string; email: string; role: string };
+    try {
+      decoded = this.jwt.verifyToken(
+        token,
+        this.config.getOrThrow<string>('jwt.reset_pass_secret'),
+      );
+    } catch {
+      throw new ForbiddenException('Invalid or expired reset token.');
     }
 
-    // hash password
-    const password = await bcrypt.hash(payload.password, 12);
+    // Optional: ensure token belongs to the same user
+    if (decoded.id !== user.id) {
+      throw new ForbiddenException('Invalid reset token for this user.');
+    }
 
-    // update into database
+    const hashed = await bcrypt.hash(payload.password, SALT_ROUNDS);
+
     await this.prisma.user.update({
-      where: {
-        id: payload.id,
-      },
-      data: {
-        password,
-      },
+      where: { id: user.id },
+      data: { password: hashed, lastPasswordChange: new Date() },
     });
+
+    return { message: 'Password reset successful.' };
   }
 }
