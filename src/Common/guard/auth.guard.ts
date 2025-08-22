@@ -35,10 +35,10 @@ export class AuthGuard implements CanActivate {
 
       const { email } = decoded;
       const user = await this.prisma.user.findUniqueOrThrow({
-        where: { email, isDelete: false, status: UserStatus.active },
+        where: { email, isDeleted: false, status: UserStatus.active },
       });
 
-      if (user.isDelete) {
+      if (user.isDeleted) {
         throw new ForbiddenException('This User is already deleted!');
       }
 

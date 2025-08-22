@@ -10,18 +10,19 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
-import { Prisma } from '@prisma/client'; // <-- use @prisma/client, not 'generated/prisma'
+import { Prisma, UserStatus } from '@prisma/client'; // <-- use @prisma/client, not 'generated/prisma'
 
-enum UserStatus {
-  active = 'active',
-  inactive = 'inactive',
-  // Add other statuses as needed
-}
 import { JwtHelperService } from 'src/Common/helper/jwtHelpers';
 import { EmailUtils } from 'src/Common/utils/emil.utils';
 import { PrismaService } from 'src/prisma/prisma.service';
 
-type SignupDto = { name: string; email: string; password: string };
+type SignupDto = {
+  username: string;
+  email: string;
+  password: string;
+  shops?: Prisma.ShopCreateNestedManyWithoutOwnerInput;
+  sessions?: Prisma.SessionCreateNestedManyWithoutUserInput;
+};
 type LoginDto = { email: string; password: string };
 type ChangePasswordDto = { oldPassword: string; newPassword: string };
 type ResetPasswordDto = { id: string; password: string };
@@ -41,7 +42,9 @@ export class AuthService {
   // SIGNUP
   // ---------------------------
   async signupDB(body: SignupDto) {
-    const { name, email, password } = body;
+    const { username, email, password, shops, sessions } = body;
+
+    console.log('this is the signup body', body);
 
     // Optional: enforce password policy here too
     if (!password || password.length < 8) {
@@ -54,17 +57,12 @@ export class AuthService {
       const result = await this.prisma.$transaction(async (tnx) => {
         const userInfo = await tnx.user.create({
           data: {
-            name,
+            username,
             email,
             password: hashPass,
+            shops,
+            sessions,
             status: UserStatus.active,
-          },
-        });
-
-        await tnx.userProfile.create({
-          data: {
-            email: userInfo.email,
-            userId: userInfo.id,
           },
         });
 
@@ -178,7 +176,7 @@ export class AuthService {
       where: { id: userData.id },
       data: {
         password: hashedPassword,
-        lastPasswordChange: new Date(),
+        createdAt: new Date(),
       },
     });
 
@@ -213,7 +211,7 @@ export class AuthService {
       'Password reset (valid for a short time)',
       `
         <div>
-          <p>Dear ${userData.name || 'User'},</p>
+          <p>Dear ${userData.username || 'User'},</p>
           <p>Click the button below to reset your password:</p>
           <p><a href="${resetPassLink}"><button>Reset Password</button></a></p>
           <p>If you did not request this, you can safely ignore this email.</p>
@@ -252,7 +250,7 @@ export class AuthService {
 
     await this.prisma.user.update({
       where: { id: user.id },
-      data: { password: hashed, lastPasswordChange: new Date() },
+      data: { password: hashed, createdAt: new Date() },
     });
 
     return { message: 'Password reset successful.' };

@@ -7,7 +7,8 @@ import { AuthGuard } from 'src/Common/guard/auth.guard';
 import { Roles } from 'src/Common/decorators/role.decorator';
 import { ZodValidationPipe } from 'src/Common/pipes/zodValidatiionPipe';
 import { authSchemas } from './auth.zodSchema';
-import { UserRole } from 'generated/prisma';
+import { UserRole } from '@prisma/client';
+// import { UserRole } from 'generated/prisma';
 
 @Controller('api/auth')
 export class AuthController {
