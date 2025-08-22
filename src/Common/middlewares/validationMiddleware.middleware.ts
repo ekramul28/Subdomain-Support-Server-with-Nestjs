@@ -1,10 +1,6 @@
-import {
-  Injectable,
-  NestMiddleware,
-  BadRequestException,
-} from '@nestjs/common';
+import { Injectable, NestMiddleware, BadRequestException } from '@nestjs/common';
 import { Request, Response, NextFunction } from 'express';
-import { ZodSchema } from 'zod';
+import { ZodSchema } from 'zod/v3';
 
 @Injectable()
 export class ValidationMiddleware implements NestMiddleware {

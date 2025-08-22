@@ -1,11 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import {
-  Injectable,
-  PipeTransform,
-  ArgumentMetadata,
-  BadRequestException,
-} from '@nestjs/common';
-import { AnyZodObject } from 'zod';
+import { Injectable, PipeTransform, ArgumentMetadata, BadRequestException } from '@nestjs/common';
+import type { AnyZodObject } from 'zod/v3';
+// import type { AnyZodObject } from 'zod';
 
 @Injectable()
 export class ZodValidationPipe implements PipeTransform {

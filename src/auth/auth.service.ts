@@ -161,7 +161,7 @@ export class AuthService {
   // ---------------------------
   // CHANGE PASSWORD
   // ---------------------------
-  async changePasswordDB(user: { email: string }, payload: ChangePasswordDto) {
+  async changePasswordDB(user: any, payload: ChangePasswordDto) {
     const userData = await this.prisma.user.findFirst({
       where: { email: user.email, status: UserStatus.active },
     });

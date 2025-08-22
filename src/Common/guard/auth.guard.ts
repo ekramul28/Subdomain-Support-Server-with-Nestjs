@@ -8,9 +8,8 @@ import {
 import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import { Request } from 'express';
-
-import { UserStatus } from '@prisma/client';
-import { PrismaService } from 'src/prisma.service';
+import { UserStatus } from 'generated/prisma';
+import { PrismaService } from 'src/prisma/prisma.service';
 
 @Injectable()
 export class AuthGuard implements CanActivate {
@@ -21,8 +20,7 @@ export class AuthGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const requiredRoles =
-      this.reflector.get<string[]>('roles', context.getHandler()) || [];
+    const requiredRoles = this.reflector.get<string[]>('roles', context.getHandler()) || [];
     const request = context.switchToHttp().getRequest<Request>();
     const token = request.headers.authorization?.split(' ')[1];
 
@@ -52,9 +50,7 @@ export class AuthGuard implements CanActivate {
       request.user = { id: user.id, role: user.role, email: user.email };
       return true;
     } catch (error) {
-      throw new UnauthorizedException(
-        error?.message || 'You have no access to this route',
-      );
+      throw new UnauthorizedException(error?.message || 'You have no access to this route');
     }
   }
 }
