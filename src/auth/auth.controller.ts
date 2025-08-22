@@ -11,7 +11,7 @@ import {
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 
-import { NextFunction, Request, Response } from 'express';
+import type { NextFunction, Request, Response } from 'express';
 import { successResponse } from 'src/Common/Re-useable/successResponse';
 import { ConfigService } from '@nestjs/config';
 import { AuthGuard } from 'src/Common/guard/auth.guard';
@@ -29,11 +29,7 @@ export class AuthController {
 
   @Post('signup')
   @UsePipes(new ZodValidationPipe(authSchemas.signupSchema))
-  async signup(
-    @Res() res: Response,
-    @Next() next: NextFunction,
-    @Body() body: any,
-  ) {
+  async signup(@Res() res: Response, @Next() next: NextFunction, @Body() body: any) {
     try {
       const result = await this.authService.signupDB(body);
       return res.send(successResponse(result, HttpStatus.OK, 'Signup done'));
@@ -43,11 +39,7 @@ export class AuthController {
   }
   @Post('login')
   @UsePipes(new ZodValidationPipe(authSchemas.loginSchema))
-  async loginUser(
-    @Res() res: Response,
-    @Next() next: NextFunction,
-    @Body() body: any,
-  ) {
+  async loginUser(@Res() res: Response, @Next() next: NextFunction, @Body() body: any) {
     try {
       const result = await this.authService.loginUserDB(body);
 
@@ -73,17 +65,11 @@ export class AuthController {
   }
 
   @Post('refresh-token')
-  async refreshToken(
-    @Req() req: Request,
-    @Res() res: Response,
-    @Next() next: NextFunction,
-  ) {
+  async refreshToken(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
     try {
       const { refreshToken } = req.cookies;
       const result = await this.authService.refreshTokenDB(refreshToken);
-      return res.send(
-        successResponse(result, HttpStatus.OK, 'refresh token send'),
-      );
+      return res.send(successResponse(result, HttpStatus.OK, 'refresh token send'));
     } catch (error) {
       next(error);
     }
@@ -92,19 +78,10 @@ export class AuthController {
   @Post('change-password')
   @UseGuards(AuthGuard)
   @Roles(UserRole.user, UserRole.admin, UserRole.vendor)
-  async changePassword(
-    @Req() req: Request,
-    @Res() res: Response,
-    @Next() next: NextFunction,
-  ) {
+  async changePassword(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
     try {
-      const result = await this.authService.changePasswordDB(
-        req?.user,
-        req?.body,
-      );
-      return res.send(
-        successResponse(result, HttpStatus.OK, 'Password change'),
-      );
+      const result = await this.authService.changePasswordDB(req?.user, req?.body);
+      return res.send(successResponse(result, HttpStatus.OK, 'Password change'));
     } catch (error) {
       next(error);
     }
@@ -113,33 +90,21 @@ export class AuthController {
   @Post('forget-password')
   @UseGuards(AuthGuard)
   @Roles(UserRole.user, UserRole.admin, UserRole.vendor)
-  async forgotPassword(
-    @Req() req: Request,
-    @Res() res: Response,
-    @Next() next: NextFunction,
-  ) {
+  async forgotPassword(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
     try {
       const result = await this.authService.forgotPasswordDB(req?.body);
-      return res.send(
-        successResponse(result, HttpStatus.OK, 'email send message'),
-      );
+      return res.send(successResponse(result, HttpStatus.OK, 'email send message'));
     } catch (error) {
       next(error);
     }
   }
 
   @Post('reset-password')
-  async resetPassword(
-    @Req() req: Request,
-    @Res() res: Response,
-    @Next() next: NextFunction,
-  ) {
+  async resetPassword(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
     try {
       const token = req.headers.authorization || '';
       const result = await this.authService.resetPasswordDB(token, req?.body);
-      return res.send(
-        successResponse(result, HttpStatus.OK, 'Password change done'),
-      );
+      return res.send(successResponse(result, HttpStatus.OK, 'Password change done'));
     } catch (error) {
       next(error);
     }
