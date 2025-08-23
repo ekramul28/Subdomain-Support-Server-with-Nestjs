@@ -1,4 +1,14 @@
-import { Controller, Post, Req, Res, HttpStatus, UseGuards, UsePipes, Body } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Req,
+  Res,
+  HttpStatus,
+  UseGuards,
+  UsePipes,
+  Body,
+  Get,
+} from '@nestjs/common';
 import { AuthService } from './auth.service';
 import type { Request, Response } from 'express';
 import { successResponse } from 'src/Common/Re-useable/successResponse';
@@ -8,6 +18,7 @@ import { Roles } from 'src/Common/decorators/role.decorator';
 import { ZodValidationPipe } from 'src/Common/pipes/zodValidatiionPipe';
 import { authSchemas } from './auth.zodSchema';
 import { UserRole } from '@prisma/client';
+
 // import { UserRole } from 'generated/prisma';
 
 @Controller('api/auth')
@@ -68,5 +79,19 @@ export class AuthController {
     const { token, ...payload } = body;
     const result = await this.authService.resetPasswordDB(token, payload);
     return successResponse(result, HttpStatus.OK, 'Password reset successfully');
+  }
+
+  @Get('me')
+  @UseGuards(AuthGuard)
+  @Roles(UserRole.user, UserRole.admin, UserRole.superAdmin)
+  async useme(@Req() req: Request, @Res() res: Response) {
+    const userId = req.user?.id;
+    const userEmail = req.user?.email;
+    const userRole = req.user;
+    console.log('Authenticated user role:', userRole);
+    console.log('Authenticated user email:', userEmail);
+    console.log('Authenticated user ID:', userId);
+    const result = await this.authService.useme(userId);
+    return successResponse(result, HttpStatus.OK, 'User information retrieved successfully');
   }
 }

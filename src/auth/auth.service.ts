@@ -255,4 +255,22 @@ export class AuthService {
 
     return { message: 'Password reset successful.' };
   }
+
+  async useme(userId: any) {
+    // Validate that 'id' exists and is a non-empty string
+
+    // Find user by ID using Prisma
+    const user = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException(`User with id ${userId} not found.`);
+    }
+
+    return {
+      message: 'User found successfully',
+      user,
+    };
+  }
 }

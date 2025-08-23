@@ -9,6 +9,7 @@ import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import { Request } from 'express';
 import { UserStatus } from 'generated/prisma';
+import { nextTick } from 'process';
 import { PrismaService } from 'src/prisma/prisma.service';
 
 @Injectable()
@@ -23,6 +24,8 @@ export class AuthGuard implements CanActivate {
     const requiredRoles = this.reflector.get<string[]>('roles', context.getHandler()) || [];
     const request = context.switchToHttp().getRequest<Request>();
     const token = request.headers.authorization?.split(' ')[1];
+
+    console.log('token:', token);
 
     if (!token) {
       throw new UnauthorizedException('You have no access to this route');
