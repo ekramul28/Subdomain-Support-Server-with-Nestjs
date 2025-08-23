@@ -84,14 +84,12 @@ export class AuthController {
   @Get('me')
   @UseGuards(AuthGuard)
   @Roles(UserRole.user, UserRole.admin, UserRole.superAdmin)
-  async useme(@Req() req: Request, @Res() res: Response) {
+  async useMe(@Req() req: Request, @Res() res: Response) {
     const userId = req.user?.id;
-    const userEmail = req.user?.email;
-    const userRole = req.user;
-    console.log('Authenticated user role:', userRole);
-    console.log('Authenticated user email:', userEmail);
-    console.log('Authenticated user ID:', userId);
-    const result = await this.authService.useme(userId);
+    if (!userId) {
+      return res.status(HttpStatus.UNAUTHORIZED).json({ message: 'Unauthorized' });
+    }
+    const result = await this.authService.useMe(userId);
     return successResponse(result, HttpStatus.OK, 'User information retrieved successfully');
   }
 }

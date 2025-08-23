@@ -256,7 +256,7 @@ export class AuthService {
     return { message: 'Password reset successful.' };
   }
 
-  async useme(userId: any) {
+  async useMe(userId: any) {
     // Validate that 'id' exists and is a non-empty string
 
     // Find user by ID using Prisma
